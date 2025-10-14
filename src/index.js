@@ -458,11 +458,13 @@ app.patch('/api/matches/:matchId/summary', async (req, res) => {
 app.patch('/api/matches/:matchId/notified', async (req, res) => {
   try {
     const { matchId } = req.params;
+    
+    logger.info(`📧 Marcando match ${matchId} como notificado`);
 
     const { data, error } = await supabase
       .from('user_tender_matches')
       .update({
-        status: 'notified',
+        // ✅ NO cambiar el status, solo marcar cuándo se notificó
         notified_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -470,13 +472,19 @@ app.patch('/api/matches/:matchId/notified', async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      logger.error(`❌ Error marcando match como notificado:`, error);
+      throw error;
+    }
+
+    logger.info(`✅ Match ${matchId} marcado como notificado`);
 
     res.json({
       status: 'ok',
       match: data
     });
   } catch (error) {
+    logger.error('Error en /api/matches/:matchId/notified:', error);
     res.status(500).json({
       status: 'error',
       error: error.message

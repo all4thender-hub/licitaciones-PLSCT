@@ -323,7 +323,190 @@ app.get('/matches/:userId', async (req, res) => {
     });
   }
 });
+// ==================== ENDPOINTS PARA N8N ====================
 
+/**
+ * Obtener matches nuevos (sin procesar)
+ * Para que n8n los procese con IA
+ */
+app.get('/api/matches/new', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    
+    const { data: matches, error } = await supabase
+      .from('user_tender_matches')
+      .select(`
+        id,
+        user_id,
+        tender_id,
+        match_score,
+        status,
+        ai_summary,
+        notified_at,
+        tenders (
+          id,
+          title,
+          description,
+          budget,
+          deadline,
+          cpv_code,
+          province,
+          contracting_body,
+          url
+        ),
+        companies (
+          company_name,
+          user_id,
+          users (
+            email
+          )
+        )
+      `)
+      .eq('status', 'new')
+      .is('ai_summary', null)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+
+    // Formatear respuesta para n8n
+    const formattedMatches = matches.map(match => ({
+      match_id: match.id,
+      user_id: match.user_id,
+      tender_id: match.tender_id,
+      match_score: match.match_score,
+      user_email: match.companies?.users?.email,
+      company_name: match.companies?.company_name,
+      tender: {
+        id: match.tenders?.id,
+        title: match.tenders?.title,
+        description: match.tenders?.description,
+        budget: match.tenders?.budget,
+        deadline: match.tenders?.deadline,
+        cpv_code: match.tenders?.cpv_code,
+        province: match.tenders?.province,
+        contracting_body: match.tenders?.contracting_body,
+        url: match.tenders?.url
+      }
+    }));
+
+    res.json({
+      total: formattedMatches.length,
+      matches: formattedMatches
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Actualizar match con resumen IA
+ */
+app.patch('/api/matches/:matchId/summary', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const { ai_summary, ai_highlights, ai_risks } = req.body;
+
+    const { data, error } = await supabase
+      .from('user_tender_matches')
+      .update({
+        ai_summary,
+        ai_highlights: ai_highlights || null,
+        ai_risks: ai_risks || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', matchId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      status: 'ok',
+      match: data
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Marcar match como notificado
+ */
+app.patch('/api/matches/:matchId/notified', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+
+    const { data, error } = await supabase
+      .from('user_tender_matches')
+      .update({
+        status: 'notified',
+        notified_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', matchId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      status: 'ok',
+      match: data
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Obtener estadísticas de procesamiento IA
+ */
+app.get('/api/matches/stats', async (req, res) => {
+  try {
+    const { count: totalMatches } = await supabase
+      .from('user_tender_matches')
+      .select('*', { count: 'exact', head: true });
+
+    const { count: newMatches } = await supabase
+      .from('user_tender_matches')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'new');
+
+    const { count: withAI } = await supabase
+      .from('user_tender_matches')
+      .select('*', { count: 'exact', head: true })
+      .not('ai_summary', 'is', null);
+
+    const { count: notified } = await supabase
+      .from('user_tender_matches')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'notified');
+
+    res.json({
+      total: totalMatches,
+      new: newMatches,
+      with_ai_summary: withAI,
+      notified: notified,
+      pending_ai: newMatches - withAI,
+      pending_notification: withAI - notified
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: error.message
+    });
+  }
+});
 // ==================== ERROR HANDLERS ====================
 
 app.use((req, res) => {

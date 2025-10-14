@@ -354,7 +354,7 @@ app.get('/api/matches/new', async (req, res) => {
           cpv_code,
           province,
           contracting_body,
-          url
+          external_id
         )
       `)
       .eq('status', 'new')
@@ -399,7 +399,7 @@ app.get('/api/matches/new', async (req, res) => {
         cpv_code: match.tenders?.cpv_code,
         province: match.tenders?.province,
         contracting_body: match.tenders?.contracting_body,
-        url: match.tenders?.url
+        external_id: match.tenders?.external_id
       }
     }));
 

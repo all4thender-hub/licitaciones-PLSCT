@@ -333,6 +333,7 @@ app.get('/api/matches/new', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     
+    // Primero obtenemos los matches con la info de licitaciones
     const { data: matches, error } = await supabase
       .from('user_tender_matches')
       .select(`
@@ -343,6 +344,7 @@ app.get('/api/matches/new', async (req, res) => {
         status,
         ai_summary,
         notified_at,
+        created_at,
         tenders (
           id,
           title,
@@ -353,13 +355,6 @@ app.get('/api/matches/new', async (req, res) => {
           province,
           contracting_body,
           url
-        ),
-        companies (
-          company_name,
-          user_id,
-          users (
-            email
-          )
         )
       `)
       .eq('status', 'new')
@@ -369,14 +364,32 @@ app.get('/api/matches/new', async (req, res) => {
 
     if (error) throw error;
 
+    // Obtener user_ids únicos
+    const userIds = [...new Set(matches.map(m => m.user_id))];
+
+    // Obtener info de usuarios y empresas
+    const { data: companies } = await supabase
+      .from('companies')
+      .select('user_id, company_name')
+      .in('user_id', userIds);
+
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, email')
+      .in('id', userIds);
+
+    // Crear mapas para lookup rápido
+    const companyMap = new Map(companies?.map(c => [c.user_id, c.company_name]) || []);
+    const userMap = new Map(users?.map(u => [u.id, u.email]) || []);
+
     // Formatear respuesta para n8n
     const formattedMatches = matches.map(match => ({
       match_id: match.id,
       user_id: match.user_id,
       tender_id: match.tender_id,
       match_score: match.match_score,
-      user_email: match.companies?.users?.email,
-      company_name: match.companies?.company_name,
+      user_email: userMap.get(match.user_id) || 'sin-email@example.com',
+      company_name: companyMap.get(match.user_id) || 'Sin nombre',
       tender: {
         id: match.tenders?.id,
         title: match.tenders?.title,
@@ -395,6 +408,7 @@ app.get('/api/matches/new', async (req, res) => {
       matches: formattedMatches
     });
   } catch (error) {
+    logger.error('Error en /api/matches/new:', error);
     res.status(500).json({
       status: 'error',
       error: error.message

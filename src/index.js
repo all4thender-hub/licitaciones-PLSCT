@@ -367,20 +367,22 @@ app.get('/api/matches/new', async (req, res) => {
     // Obtener user_ids únicos
     const userIds = [...new Set(matches.map(m => m.user_id))];
 
-    // Obtener info de usuarios y empresas
-    const { data: companies } = await supabase
-      .from('companies')
+    // Obtener info de usuarios desde auth.users
+    const { data: authUsers } = await supabase.auth.admin.listUsers();
+    const userMap = new Map(
+      authUsers.users
+        .filter(u => userIds.includes(u.id))
+        .map(u => [u.id, u.email])
+    );
+
+    // Obtener info de empresas desde user_profiles
+    const { data: profiles } = await supabase
+      .from('user_profiles')
       .select('user_id, company_name')
       .in('user_id', userIds);
 
-    const { data: users } = await supabase
-      .from('users')
-      .select('id, email')
-      .in('id', userIds);
-
-    // Crear mapas para lookup rápido
-    const companyMap = new Map(companies?.map(c => [c.user_id, c.company_name]) || []);
-    const userMap = new Map(users?.map(u => [u.id, u.email]) || []);
+    // Crear mapa para lookup rápido
+    const companyMap = new Map(profiles?.map(p => [p.user_id, p.company_name]) || []);
 
     // Formatear respuesta para n8n
     const formattedMatches = matches.map(match => ({
@@ -388,8 +390,8 @@ app.get('/api/matches/new', async (req, res) => {
       user_id: match.user_id,
       tender_id: match.tender_id,
       match_score: match.match_score,
-      user_email: userMap.get(match.user_id) || 'sin-email@example.com',
-      company_name: companyMap.get(match.user_id) || 'Sin nombre',
+      user_email: userMap.get(match.user_id) || 'no-email@example.com',
+      company_name: companyMap.get(match.user_id) || 'Empresa sin nombre',
       tender: {
         id: match.tenders?.id,
         title: match.tenders?.title,

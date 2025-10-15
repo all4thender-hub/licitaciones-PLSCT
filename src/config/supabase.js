@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { logger } from '../utils/logger.js';
 
 dotenv.config();
 
@@ -22,13 +23,59 @@ export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 export const supabaseHelpers = {
   // Obtener provincias activas (que tienen usuarios)
   async getActiveProvinces() {
-    const { data, error } = await supabase
-      .from('scraping_provinces')
-      .select('province, region')
-      .eq('is_active', true);
+  try {
+    // Obtener usuarios activos
+    const { data: activeUsers, error: usersError } = await supabase
+      .from('companies')
+      .select('user_id')
+      .in('subscription_status', ['trial', 'active']);
+
+    if (usersError) throw usersError;
+
+    if (!activeUsers || activeUsers.length === 0) {
+      logger.warn('⚠️ No hay usuarios activos');
+      return [];
+    }
+
+    const userIds = activeUsers.map(u => u.user_id);
+
+    // Obtener provincias de user_profiles
+    const { data: profiles, error: profilesError } = await supabase
+      .from('user_profiles')
+      .select('preferred_province, locations')
+      .in('user_id', userIds);
+
+    if (profilesError) throw profilesError;
+
+    // Extraer provincias únicas
+    const provincesSet = new Set();
     
-    if (error) throw error;
-    return data;
+    profiles?.forEach(profile => {
+      // Preferred province
+      if (profile.preferred_province) {
+        provincesSet.add(profile.preferred_province);
+      }
+      
+      // Locations (array)
+      if (profile.locations && Array.isArray(profile.locations)) {
+        profile.locations.forEach(loc => {
+          if (loc && typeof loc === 'string') {
+            provincesSet.add(loc.trim());
+          }
+        });
+      }
+    });
+
+    const provinces = Array.from(provincesSet).sort();
+    
+    logger.info(`📍 ${provinces.length} provincias activas: ${provinces.join(', ')}`);
+    
+    return provinces;
+
+  } catch (error) {
+    logger.error('❌ Error obteniendo provincias activas:', error);
+    return [];
+  }
   },
 
   // Verificar si un CPV es de construcción

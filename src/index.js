@@ -604,10 +604,11 @@ async function startServer() {
     });
 
   } catch (error) {
-    logger.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    logger.error('❌ ERROR AL INICIAR SERVIDOR');
-    logger.error(`Error: ${error.message}`);
-    logger.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('❌ ERROR AL INICIAR SERVIDOR');
+    console.error('Error completo:', error);
+    console.error('Stack trace:', error.stack); // ✅ ESTO ES LO IMPORTANTE
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     process.exit(1);
   }
 }

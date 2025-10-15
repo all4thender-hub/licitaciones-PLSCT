@@ -61,7 +61,7 @@ class PLACSPApi {
         return [];
       }
 
-      logger.info(`📍 Filtrando por provincias: ${userProvinces.join(', ')}`);
+      logger.info(`🔍 Filtrando por provincias: ${userProvinces.join(', ')}`);
 
       // 1. Obtener feed completo
       const allEntries = await this.getFeed();
@@ -81,9 +81,41 @@ class PLACSPApi {
       logger.info(`✅ ${filteredByProvince.length} licitaciones en provincias con usuarios`);
 
       // 5. Transformar a formato útil
-      const tenders = filteredByProvince.map(entry => this.transformEntry(entry)).filter(t => t !== null);
+      const tenders = filteredByProvince
+        .map(entry => this.transformEntry(entry))
+        .filter(t => t !== null);
 
-      return tenders;
+      // ✅ 6. NUEVO: Filtrar solo licitaciones NO VENCIDAS
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const validTenders = tenders.filter(tender => {
+        if (!tender.deadline) return false;
+        
+        try {
+          const deadlineDate = new Date(tender.deadline);
+          deadlineDate.setHours(0, 0, 0, 0);
+          
+          return deadlineDate >= today;
+        } catch (error) {
+          return false;
+        }
+      });
+
+      logger.info(`✅ Licitaciones VIGENTES (no vencidas): ${validTenders.length}`);
+
+      if (validTenders.length > 0) {
+        const deadlines = validTenders
+          .map(t => t.deadline)
+          .filter(Boolean)
+          .sort();
+        
+        if (deadlines.length > 0) {
+          logger.info(`📅 Deadlines: desde ${deadlines[0]} hasta ${deadlines[deadlines.length - 1]}`);
+        }
+      }
+
+      return validTenders;
 
     } catch (error) {
       logger.error('❌ Error obteniendo licitaciones:', error.message);

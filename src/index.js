@@ -626,3 +626,40 @@ process.on('SIGINT', () => {
 });
 
 startServer();
+/**
+ * Obtener info completa del usuario
+ */
+app.get('/api/users/:userId/complete', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('company_name, company_size, budget_min, budget_max, sectors, locations')
+      .eq('user_id', userId)
+      .single();
+    
+    const { data: company } = await supabase
+      .from('companies')
+      .select('subscription_tier, subscription_status')
+      .eq('user_id', userId)
+      .single();
+    
+    const { data: { users } } = await supabase.auth.admin.listUsers();
+    const user = users?.find(u => u.id === userId);
+    
+    res.json({
+      user_email: user?.email || 'no-email@example.com',
+      company_name: profile?.company_name || 'Empresa',
+      company_size: profile?.company_size || 'N/A',
+      budget_min: profile?.budget_min || 0,
+      budget_max: profile?.budget_max || 0,
+      sectors: profile?.sectors || [],
+      locations: profile?.locations || [],
+      subscription_tier: company?.subscription_tier || 'basic',
+      subscription_status: company?.subscription_status || 'trial'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});

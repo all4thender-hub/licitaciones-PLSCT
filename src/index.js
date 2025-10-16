@@ -77,7 +77,10 @@ app.get('/sync/status', (req, res) => {
 /**
  * Ejecutar sincronización manual
  */
-app.post('/sync/run', async (req, res) => {
+/**
+ * Ejecutar sincronización manual (GET y POST)
+ */
+const runSyncHandler = async (req, res) => {
   try {
     logger.info('🔧 Sincronización manual solicitada via API');
     
@@ -96,7 +99,11 @@ app.post('/sync/run', async (req, res) => {
       error: error.message
     });
   }
-});
+};
+
+// Permitir tanto GET como POST
+app.get('/sync/run', runSyncHandler);
+app.post('/sync/run', runSyncHandler);
 
 /**
  * Obtener logs de sincronización recientes
